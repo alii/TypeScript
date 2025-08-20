@@ -3618,6 +3618,11 @@ export function createPrinter(printerOptions: PrinterOptions = {}, handlers: Pri
         }
         emit(node.name);
 
+        if (node.attributes && isStringLiteral(node.name)) {
+            writeSpace();
+            emit(node.attributes);
+        }
+
         let body = node.body;
         if (!body) return writeTrailingSemicolon();
         while (body && isModuleDeclaration(body)) {

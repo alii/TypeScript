@@ -585,7 +585,7 @@ function addEs6Export(d: TopLevelDeclarationStatement): TopLevelDeclarationState
         case SyntaxKind.VariableStatement:
             return factory.updateVariableStatement(d, modifiers, d.declarationList);
         case SyntaxKind.ModuleDeclaration:
-            return factory.updateModuleDeclaration(d, modifiers, d.name, d.body);
+            return factory.updateModuleDeclaration(d, modifiers, d.name, d.body, d.attributes);
         case SyntaxKind.EnumDeclaration:
             return factory.updateEnumDeclaration(d, modifiers, d.name, d.members);
         case SyntaxKind.TypeAliasDeclaration:

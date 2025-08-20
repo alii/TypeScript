@@ -242,6 +242,7 @@ describe("unittests:: PrinterAPI", () => {
                     ts.factory.createIdentifier("global"),
                     ts.factory.createModuleBlock(ts.emptyArray),
                     ts.NodeFlags.GlobalAugmentation,
+                    /*attributes*/ undefined,
                 ),
                 ts.createSourceFile("source.ts", "", ts.ScriptTarget.ES2015),
             ));
@@ -254,6 +255,7 @@ describe("unittests:: PrinterAPI", () => {
                     ts.factory.createIdentifier("global"),
                     ts.factory.createModuleBlock(ts.emptyArray),
                     ts.NodeFlags.GlobalAugmentation,
+                    /*attributes*/ undefined,
                 ),
                 ts.createSourceFile("source.ts", "", ts.ScriptTarget.ES2015),
             ));

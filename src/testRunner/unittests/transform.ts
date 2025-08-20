@@ -265,7 +265,7 @@ describe("unittests:: TransformAPI", () => {
                     sourceFile,
                     ts.factory.createNodeArray([
                         ts.factory.createClassDeclaration(/*modifiers*/ undefined, "Foo", /*typeParameters*/ undefined, /*heritageClauses*/ undefined, /*members*/ undefined!), // TODO: GH#18217
-                        ts.factory.createModuleDeclaration(/*modifiers*/ undefined, ts.factory.createIdentifier("Foo"), ts.factory.createModuleBlock([ts.factory.createEmptyStatement()])),
+                        ts.factory.createModuleDeclaration(/*modifiers*/ undefined, ts.factory.createIdentifier("Foo"), ts.factory.createModuleBlock([ts.factory.createEmptyStatement()]), /*flags*/ undefined, /*attributes*/ undefined),
                     ]),
                 );
                 return result;

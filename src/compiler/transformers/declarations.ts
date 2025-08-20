@@ -486,6 +486,8 @@ export function transformDeclarations(context: TransformationContext): Transform
                                 [factory.createModifier(SyntaxKind.DeclareKeyword)],
                                 factory.createStringLiteral(getResolvedExternalModuleName(context.getEmitHost(), sourceFile)),
                                 factory.createModuleBlock(setTextRange(factory.createNodeArray(transformAndReplaceLatePaintedStatements(statements)), sourceFile.statements)),
+                                /*flags*/ undefined,
+                                /*attributes*/ undefined,
                             )],
                             /*isDeclarationFile*/ true,
                             /*referencedFiles*/ [],
@@ -1363,7 +1365,7 @@ export function transformDeclarations(context: TransformationContext): Transform
         name: ModuleName,
         body: ModuleBody | undefined,
     ) {
-        const updated = factory.updateModuleDeclaration(node, modifiers, name, body);
+        const updated = factory.updateModuleDeclaration(node, modifiers, name, body, node.attributes);
 
         if (isAmbientModule(updated) || updated.flags & NodeFlags.Namespace) {
             return updated;
@@ -1374,6 +1376,7 @@ export function transformDeclarations(context: TransformationContext): Transform
             updated.name,
             updated.body,
             updated.flags | NodeFlags.Namespace,
+            updated.attributes,
         );
 
         setOriginalNode(fixed, updated);
@@ -1457,7 +1460,7 @@ export function transformDeclarations(context: TransformationContext): Transform
                         reportExpandoFunctionErrors(input);
                     }
                     // Use parseNodeFactory so it is usable as an enclosing declaration
-                    const fakespace = parseNodeFactory.createModuleDeclaration(/*modifiers*/ undefined, clean.name || factory.createIdentifier("_default"), factory.createModuleBlock([]), NodeFlags.Namespace);
+                    const fakespace = parseNodeFactory.createModuleDeclaration(/*modifiers*/ undefined, clean.name || factory.createIdentifier("_default"), factory.createModuleBlock([]), NodeFlags.Namespace, /*attributes*/ undefined);
                     setParent(fakespace, enclosingDeclaration as SourceFile | NamespaceDeclaration);
                     fakespace.locals = createSymbolTable(props);
                     fakespace.symbol = props[0].parent!;
@@ -1493,7 +1496,7 @@ export function transformDeclarations(context: TransformationContext): Transform
                             })),
                         ));
                     }
-                    const namespaceDecl = factory.createModuleDeclaration(ensureModifiers(input), input.name!, factory.createModuleBlock(declarations), NodeFlags.Namespace);
+                    const namespaceDecl = factory.createModuleDeclaration(ensureModifiers(input), input.name!, factory.createModuleBlock(declarations), NodeFlags.Namespace, /*attributes*/ undefined);
                     if (!hasEffectiveModifier(clean, ModifierFlags.Default)) {
                         return [clean, namespaceDecl];
                     }
@@ -1515,6 +1518,7 @@ export function transformDeclarations(context: TransformationContext): Transform
                         modifiers,
                         namespaceDecl.name,
                         namespaceDecl.body,
+                        namespaceDecl.attributes,
                     );
 
                     const exportDefaultDeclaration = factory.createExportAssignment(

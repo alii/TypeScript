@@ -4545,13 +4545,15 @@ export function createNodeFactory(flags: NodeFactoryFlags, baseFactory: BaseNode
         modifiers: readonly ModifierLike[] | undefined,
         name: ModuleName,
         body: ModuleBody | undefined,
-        flags = NodeFlags.None,
+        flags: NodeFlags | undefined,
+        attributes: ImportAttributes | undefined,
     ) {
         const node = createBaseDeclaration<ModuleDeclaration>(SyntaxKind.ModuleDeclaration);
         node.modifiers = asNodeArray(modifiers);
-        node.flags |= flags & (NodeFlags.Namespace | NodeFlags.NestedNamespace | NodeFlags.GlobalAugmentation);
+        node.flags |= (flags || NodeFlags.None) & (NodeFlags.Namespace | NodeFlags.NestedNamespace | NodeFlags.GlobalAugmentation);
         node.name = name;
         node.body = body;
+        node.attributes = attributes;
         if (modifiersToFlags(node.modifiers) & ModifierFlags.Ambient) {
             node.transformFlags = TransformFlags.ContainsTypeScript;
         }
@@ -4559,6 +4561,7 @@ export function createNodeFactory(flags: NodeFactoryFlags, baseFactory: BaseNode
             node.transformFlags |= propagateChildrenFlags(node.modifiers) |
                 propagateChildFlags(node.name) |
                 propagateChildFlags(node.body) |
+                propagateChildFlags(node.attributes) |
                 TransformFlags.ContainsTypeScript;
         }
         node.transformFlags &= ~TransformFlags.ContainsPossibleTopLevelAwait; // Module declarations cannot contain `await`.
@@ -4575,11 +4578,13 @@ export function createNodeFactory(flags: NodeFactoryFlags, baseFactory: BaseNode
         modifiers: readonly ModifierLike[] | undefined,
         name: ModuleName,
         body: ModuleBody | undefined,
+        attributes: ImportAttributes | undefined,
     ) {
         return node.modifiers !== modifiers
                 || node.name !== name
                 || node.body !== body
-            ? update(createModuleDeclaration(modifiers, name, body, node.flags), node)
+                || node.attributes !== attributes
+            ? update(createModuleDeclaration(modifiers, name, body, node.flags, attributes), node)
             : node;
     }
 
@@ -7094,7 +7099,7 @@ export function createNodeFactory(flags: NodeFactoryFlags, baseFactory: BaseNode
             isInterfaceDeclaration(node) ? updateInterfaceDeclaration(node, modifierArray, node.name, node.typeParameters, node.heritageClauses, node.members) :
             isTypeAliasDeclaration(node) ? updateTypeAliasDeclaration(node, modifierArray, node.name, node.typeParameters, node.type) :
             isEnumDeclaration(node) ? updateEnumDeclaration(node, modifierArray, node.name, node.members) :
-            isModuleDeclaration(node) ? updateModuleDeclaration(node, modifierArray, node.name, node.body) :
+            isModuleDeclaration(node) ? updateModuleDeclaration(node, modifierArray, node.name, node.body, node.attributes) :
             isImportEqualsDeclaration(node) ? updateImportEqualsDeclaration(node, modifierArray, node.isTypeOnly, node.name, node.moduleReference) :
             isImportDeclaration(node) ? updateImportDeclaration(node, modifierArray, node.importClause, node.moduleSpecifier, node.attributes) :
             isExportAssignment(node) ? updateExportAssignment(node, modifierArray, node.expression) :

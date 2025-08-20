@@ -126,6 +126,7 @@ import {
     identifierToKeywordKind,
     idText,
     IfStatement,
+    ImportAttributes,
     ImportClause,
     InternalSymbolName,
     isAliasableExpression,
@@ -751,6 +752,44 @@ function createBinder(): (file: SourceFile, options: CompilerOptions) => void {
         return isNamedDeclaration(node) ? declarationNameToString(node.name) : unescapeLeadingUnderscores(Debug.checkDefined(getDeclarationName(node)));
     }
 
+    function shouldNotMergeModulesWithDifferentAttributes(symbol: Symbol, node: Declaration): boolean {
+        // Check if this is a module declaration with attributes trying to merge with another module
+        if (isModuleDeclaration(node) && symbol.flags & SymbolFlags.Module) {
+            // If the new module has attributes, check if any existing declaration has different attributes
+            if (node.attributes && symbol.declarations) {
+                for (const decl of symbol.declarations) {
+                    if (isModuleDeclaration(decl)) {
+                        if (!areImportAttributesEqual(decl.attributes, node.attributes)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function areImportAttributesEqual(attrs1: ImportAttributes | undefined, attrs2: ImportAttributes | undefined): boolean {
+        if (!attrs1 && !attrs2) return true;
+        if (!attrs1 || !attrs2) return false;
+        if (attrs1.elements.length !== attrs2.elements.length) return false;
+
+        const map1 = new Map<string, string>();
+        for (const attr of attrs1.elements) {
+            const name = isStringLiteralLike(attr.name) ? attr.name.text : attr.name.escapedText.toString();
+            const value = isStringLiteralLike(attr.value) ? attr.value.text : "";
+            map1.set(name, value);
+        }
+
+        for (const attr of attrs2.elements) {
+            const name = isStringLiteralLike(attr.name) ? attr.name.text : attr.name.escapedText.toString();
+            const value = isStringLiteralLike(attr.value) ? attr.value.text : "";
+            if (map1.get(name) !== value) return false;
+        }
+
+        return true;
+    }
+
     /**
      * Declares a Symbol for the node and adds it to symbols. Reports errors for conflicting identifier names.
      * @param symbolTable - The symbol table which node will be added to.
@@ -811,7 +850,7 @@ function createBinder(): (file: SourceFile, options: CompilerOptions) => void {
                 // A symbol already exists, so don't add this as a declaration.
                 return symbol;
             }
-            else if (symbol.flags & excludes) {
+            else if (symbol.flags & excludes || shouldNotMergeModulesWithDifferentAttributes(symbol, node)) {
                 if (symbol.isReplaceableByMethod) {
                     // Javascript constructor-declared symbols can be discarded in favor of
                     // prototype symbols like methods.
@@ -2363,8 +2402,28 @@ function createBinder(): (file: SourceFile, options: CompilerOptions) => void {
                     }
                 }
 
-                const symbol = declareSymbolAndAddToSymbolTable(node, SymbolFlags.ValueModule, SymbolFlags.ValueModuleExcludes)!;
-                file.patternAmbientModules = append<PatternAmbientModule>(file.patternAmbientModules, pattern && !isString(pattern) ? { pattern, symbol } : undefined);
+                // For pattern ambient modules (with asterisk), each one gets its own symbol
+                // regardless of whether they have the same pattern. This allows multiple
+                // pattern modules with different attributes to coexist.
+                let symbol: Symbol;
+                if (pattern && !isString(pattern)) {
+                    // Pattern module - create a symbol directly without checking for duplicates
+                    symbol = createSymbol(SymbolFlags.ValueModule, getDeclarationName(node)!);
+                    addDeclarationToSymbol(symbol, node, SymbolFlags.ValueModule);
+                    symbol.parent = file.symbol;
+                    
+                    file.patternAmbientModules = append<PatternAmbientModule>(
+                        file.patternAmbientModules,
+                        {
+                            pattern,
+                            symbol,
+                            attributes: node.attributes,
+                        },
+                    );
+                } else {
+                    // Non-pattern module - use normal symbol table logic
+                    symbol = declareSymbolAndAddToSymbolTable(node, SymbolFlags.ValueModule, SymbolFlags.ValueModuleExcludes)!;
+                }
             }
         }
         else {

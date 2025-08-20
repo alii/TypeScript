@@ -313,6 +313,7 @@ function withContext<T>(
             expandoFunc.name,
             factory.createModuleBlock(newProperties),
             /*flags*/ NodeFlags.Namespace | NodeFlags.ExportContext | NodeFlags.Ambient | NodeFlags.ContextFlags,
+            /*attributes*/ undefined,
         );
         changeTracker.insertNodeAfter(sourceFile, expandoFunc, namespace);
         return [Diagnostics.Annotate_types_of_properties_expando_function_in_a_namespace];

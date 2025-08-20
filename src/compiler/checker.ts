@@ -197,7 +197,6 @@ import {
     filter,
     find,
     findAncestor,
-    findBestPatternMatch,
     findConstructorDeclaration,
     findIndex,
     findLast,
@@ -705,6 +704,7 @@ import {
     isPartOfTypeNode,
     isPartOfTypeOnlyImportOrExportDeclaration,
     isPartOfTypeQuery,
+    isPatternMatch,
     isPlainJsFile,
     isPrefixUnaryExpression,
     isPrivateIdentifier,
@@ -4692,12 +4692,41 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     function resolveExternalModuleNameWorker(location: Node, moduleReferenceExpression: Expression, moduleNotFoundError: DiagnosticMessage | undefined, ignoreErrors = false, isForAugmentation = false): Symbol | undefined {
-        return isStringLiteralLike(moduleReferenceExpression)
-            ? resolveExternalModule(location, moduleReferenceExpression.text, moduleNotFoundError, !ignoreErrors ? moduleReferenceExpression : undefined, isForAugmentation)
-            : undefined;
+        if (!isStringLiteralLike(moduleReferenceExpression)) {
+            return undefined;
+        }
+
+        let importAttributes: ImportAttributes | undefined;
+        const importDecl = findAncestor(location, isImportDeclaration);
+        if (importDecl) {
+            importAttributes = importDecl.attributes;
+        }
+
+        return resolveExternalModule(location, moduleReferenceExpression.text, moduleNotFoundError, !ignoreErrors ? moduleReferenceExpression : undefined, isForAugmentation, importAttributes);
     }
 
-    function resolveExternalModule(location: Node, moduleReference: string, moduleNotFoundError: DiagnosticMessage | undefined, errorNode: Node | undefined, isForAugmentation = false): Symbol | undefined {
+    function areImportAttributesEqual(attrs1: ImportAttributes | undefined, attrs2: ImportAttributes | undefined): boolean {
+        if (!attrs1 && !attrs2) return true;
+        if (!attrs1 || !attrs2) return false;
+        if (attrs1.elements.length !== attrs2.elements.length) return false;
+
+        const map1 = new Map<string, string>();
+        for (const attr of attrs1.elements) {
+            const name = isStringLiteralLike(attr.name) ? attr.name.text : attr.name.escapedText.toString();
+            const value = isStringLiteralLike(attr.value) ? attr.value.text : "";
+            map1.set(name, value);
+        }
+
+        for (const attr of attrs2.elements) {
+            const name = isStringLiteralLike(attr.name) ? attr.name.text : attr.name.escapedText.toString();
+            const value = isStringLiteralLike(attr.value) ? attr.value.text : "";
+            if (map1.get(name) !== value) return false;
+        }
+
+        return true;
+    }
+
+    function resolveExternalModule(location: Node, moduleReference: string, moduleNotFoundError: DiagnosticMessage | undefined, errorNode: Node | undefined, isForAugmentation = false, importAttributes?: ImportAttributes): Symbol | undefined {
         if (errorNode && startsWith(moduleReference, "@types/")) {
             const diag = Diagnostics.Cannot_import_type_declaration_files_Consider_importing_0_instead_of_1;
             const withoutAtTypePrefix = removePrefix(moduleReference, "@types/");
@@ -4835,8 +4864,21 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
 
         if (patternAmbientModules) {
-            const pattern = findBestPatternMatch(patternAmbientModules, _ => _.pattern, moduleReference);
-            if (pattern) {
+            // First, try to find pattern modules that match both the pattern and attributes
+            const matchingPatterns = patternAmbientModules.filter(p => {
+                if (!p.pattern || isString(p.pattern)) return false;
+                const patternMatches = isPatternMatch(p.pattern, moduleReference);
+                if (!patternMatches) return false;
+
+                // Pattern modules with attributes must match import attributes exactly
+                // Pattern modules without attributes only match imports without attributes
+                return areImportAttributesEqual(p.attributes, importAttributes);
+            });
+
+            if (matchingPatterns.length > 0) {
+                // Use the first matching pattern (could be improved to find best match)
+                const pattern = matchingPatterns[0];
+
                 // If the module reference matched a pattern ambient module ('*.foo') but there's also a
                 // module augmentation by the specific name requested ('a.foo'), we store the merged symbol
                 // by the augmentation name ('a.foo'), because asking for *.foo should not give you exports
@@ -9374,6 +9416,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                                     ),
                                 ]),
                             ),
+                            ns.attributes,
                         );
                         statements = [...statements.slice(0, nsIndex), ns, ...statements.slice(nsIndex + 1)];
                     }
@@ -10005,6 +10048,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                             factory.createIdentifier(localName),
                             nsBody,
                             NodeFlags.Namespace,
+                            /*attributes*/ undefined,
                         ),
                         ModifierFlags.None,
                     );
@@ -10133,7 +10177,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
 
                     // Add a namespace
                     // Create namespace as non-synthetic so it is usable as an enclosing declaration
-                    let fakespace = parseNodeFactory.createModuleDeclaration(/*modifiers*/ undefined, localName, factory.createModuleBlock([]), nodeFlags);
+                    let fakespace = parseNodeFactory.createModuleDeclaration(/*modifiers*/ undefined, localName, factory.createModuleBlock([]), nodeFlags, /*attributes*/ undefined);
                     setParent(fakespace, enclosingDeclaration as SourceFile | NamespaceDeclaration);
                     fakespace.locals = createSymbolTable(props);
                     fakespace.symbol = props[0].parent!;
@@ -10164,6 +10208,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                         fakespace.modifiers,
                         fakespace.name,
                         factory.createModuleBlock(exportModifierStripped),
+                        fakespace.attributes,
                     );
                     addResult(fakespace, modifierFlags); // namespaces can never be default exported
                 }
@@ -10175,6 +10220,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                             localName,
                             factory.createModuleBlock([]),
                             nodeFlags,
+                            /*attributes*/ undefined,
                         ),
                         modifierFlags,
                     );
@@ -33951,7 +33997,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             ? Diagnostics.Cannot_find_module_0_Did_you_mean_to_set_the_moduleResolution_option_to_nodenext_or_to_add_aliases_to_the_paths_option
             : Diagnostics.This_JSX_tag_requires_the_module_path_0_to_exist_but_none_could_be_found_Make_sure_you_have_types_for_the_appropriate_package_installed;
         const specifier = getJSXRuntimeImportSpecifier(file, runtimeImportSpecifier);
-        const mod = resolveExternalModule(specifier || location!, runtimeImportSpecifier, errorMessage, location);
+        const mod = resolveExternalModule(specifier || location!, runtimeImportSpecifier, errorMessage, location, /*isForAugmentation*/ false, /*importAttributes*/ undefined);
         const result = mod && mod !== unknownSymbol ? getMergedSymbol(resolveSymbol(mod)) : undefined;
         if (links) {
             links.jsxImplicitImportContainer = result || false;
@@ -51519,7 +51565,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     function resolveHelpersModule(file: SourceFile, errorNode: Node) {
         const links = getNodeLinks(file);
         if (!links.externalHelpersModule) {
-            links.externalHelpersModule = resolveExternalModule(getImportHelpersImportSpecifier(file), externalHelpersModuleNameText, Diagnostics.This_syntax_requires_an_imported_helper_but_module_0_cannot_be_found, errorNode) || unknownSymbol;
+            links.externalHelpersModule = resolveExternalModule(getImportHelpersImportSpecifier(file), externalHelpersModuleNameText, Diagnostics.This_syntax_requires_an_imported_helper_but_module_0_cannot_be_found, errorNode, /*isForAugmentation*/ false, /*importAttributes*/ undefined) || unknownSymbol;
         }
         return links.externalHelpersModule;
     }

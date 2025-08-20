@@ -3633,6 +3633,7 @@ export interface ModuleDeclaration extends DeclarationStatement, JSDocContainer,
     readonly modifiers?: NodeArray<ModifierLike>;
     readonly name: ModuleName;
     readonly body?: ModuleBody | JSDocNamespaceDeclaration;
+    readonly attributes?: ImportAttributes;
 }
 
 export type NamespaceBody =
@@ -6221,6 +6222,7 @@ export type SymbolTable = Map<__String, Symbol>;
 export interface PatternAmbientModule {
     pattern: Pattern;
     symbol: Symbol;
+    attributes?: ImportAttributes;
 }
 
 // dprint-ignore
@@ -9061,8 +9063,8 @@ export interface NodeFactory {
     updateTypeAliasDeclaration(node: TypeAliasDeclaration, modifiers: readonly ModifierLike[] | undefined, name: Identifier, typeParameters: readonly TypeParameterDeclaration[] | undefined, type: TypeNode): TypeAliasDeclaration;
     createEnumDeclaration(modifiers: readonly ModifierLike[] | undefined, name: string | Identifier, members: readonly EnumMember[]): EnumDeclaration;
     updateEnumDeclaration(node: EnumDeclaration, modifiers: readonly ModifierLike[] | undefined, name: Identifier, members: readonly EnumMember[]): EnumDeclaration;
-    createModuleDeclaration(modifiers: readonly ModifierLike[] | undefined, name: ModuleName, body: ModuleBody | undefined, flags?: NodeFlags): ModuleDeclaration;
-    updateModuleDeclaration(node: ModuleDeclaration, modifiers: readonly ModifierLike[] | undefined, name: ModuleName, body: ModuleBody | undefined): ModuleDeclaration;
+    createModuleDeclaration(modifiers: readonly ModifierLike[] | undefined, name: ModuleName, body: ModuleBody | undefined, flags: NodeFlags | undefined, attributes: ImportAttributes | undefined): ModuleDeclaration;
+    updateModuleDeclaration(node: ModuleDeclaration, modifiers: readonly ModifierLike[] | undefined, name: ModuleName, body: ModuleBody | undefined, attributes: ImportAttributes | undefined): ModuleDeclaration;
     createModuleBlock(statements: readonly Statement[]): ModuleBlock;
     updateModuleBlock(node: ModuleBlock, statements: readonly Statement[]): ModuleBlock;
     createCaseBlock(clauses: readonly CaseOrDefaultClause[]): CaseBlock;

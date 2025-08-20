@@ -8303,7 +8303,7 @@ namespace Parser {
         const body = parseOptional(SyntaxKind.DotToken)
             ? parseModuleOrNamespaceDeclaration(getNodePos(), /*hasJSDoc*/ false, /*modifiers*/ undefined, NodeFlags.NestedNamespace | namespaceFlag) as NamespaceDeclaration
             : parseModuleBlock();
-        const node = factory.createModuleDeclaration(modifiers, name, body, flags);
+        const node = factory.createModuleDeclaration(modifiers, name, body, flags, /*attributes*/ undefined);
         return withJSDoc(finishNode(node, pos), hasJSDoc);
     }
 
@@ -8319,6 +8319,14 @@ namespace Parser {
             name = parseLiteralNode() as StringLiteral;
             name.text = internIdentifier(name.text);
         }
+
+        // parse import attributes if present (e.g., "with { type: "bytes" }")
+        let attributes: ImportAttributes | undefined;
+        const currentToken = token();
+        if ((currentToken === SyntaxKind.WithKeyword) && !scanner.hasPrecedingLineBreak()) { // PR review: should we also support assert here? e.g. "currentToken === SyntaxKind.AssertKeyword"
+            attributes = parseImportAttributes(currentToken);
+        }
+
         let body: ModuleBlock | undefined;
         if (token() === SyntaxKind.OpenBraceToken) {
             body = parseModuleBlock();
@@ -8326,7 +8334,7 @@ namespace Parser {
         else {
             parseSemicolon();
         }
-        const node = factory.createModuleDeclaration(modifiersIn, name, body, flags);
+        const node = factory.createModuleDeclaration(modifiersIn, name, body, flags, attributes);
         return withJSDoc(finishNode(node, pos), hasJSDoc);
     }
 
@@ -9673,6 +9681,7 @@ namespace Parser {
                         typeNameOrNamespaceName,
                         body,
                         nested ? NodeFlags.NestedNamespace : undefined,
+                        /*attributes*/ undefined,
                     ) as JSDocNamespaceDeclaration;
                     return finishNode(jsDocNamespaceNode, start);
                 }
